@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HeritageShortStoryboard",
+  "description": "Storyboard schema for 'The Coffee That Carries a Story' — heritage short film pipeline",
+  "type": "object",
+  "required": ["film", "shots"],
+  "additionalProperties": false,
+  "properties": {
+    "film": {
+      "type": "object",
+      "required": ["title", "logline", "duration_target_s", "aspect_ratios", "language_narration", "language_subtitles", "style"],
+      "additionalProperties": false,
+      "properties": {
+        "title":               { "type": "string" },
+        "logline":             { "type": "string" },
+        "duration_target_s":   { "type": "number", "minimum": 60, "maximum": 90 },
+        "aspect_ratios": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["16:9", "9:16"] },
+          "minItems": 2,
+          "uniqueItems": true
+        },
+        "language_narration":  { "type": "string" },
+        "language_subtitles":  { "type": "string" },
+        "style": {
+          "type": "object",
+          "required": ["palette", "mood", "lighting", "suffix"],
+          "additionalProperties": false,
+          "properties": {
+            "palette": { "type": "string" },
+            "mood":    { "type": "string" },
+            "lighting":{ "type": "string" },
+            "suffix":  { "type": "string", "description": "Appended to every image_prompt for visual consistency" }
+          }
+        }
+      }
+    },
+    "shots": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 12,
+      "items": { "$ref": "#/definitions/shot" }
+    }
+  },
+  "definitions": {
+    "narration_clip": {
+      "type": "object",
+      "required": ["path", "offset_s", "narration_am", "subtitle_en"],
+      "additionalProperties": false,
+      "properties": {
+        "path":         { "type": "string", "description": "Relative path to the WAV file from project root" },
+        "offset_s":     { "type": "number", "minimum": 0, "description": "Seconds from shot start when this clip begins" },
+        "narration_am": { "type": "string", "description": "Amharic text spoken in this clip" },
+        "subtitle_en":  { "type": "string", "description": "English subtitle text for this clip" }
+      }
+    },
+    "shot": {
+      "type": "object",
+      "required": ["id", "type", "duration_s", "image_prompt", "motion_prompt", "camera", "music_cue", "seed"],
+      "additionalProperties": false,
+      "properties": {
+        "id":           { "type": "string", "pattern": "^shot_\\d{2}$" },
+        "type":         { "type": "string", "enum": ["narrated", "music_only"] },
+        "duration_s":   { "type": "number", "minimum": 2, "maximum": 20 },
+        "image_prompt": { "type": "string", "minLength": 15 },
+        "motion_prompt":{ "type": "string" },
+        "camera":       { "type": "string" },
+        "music_cue":    { "type": "string" },
+        "seed":         { "type": "integer", "minimum": 0 },
+        "narration_clips": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/narration_clip" }
+        }
+      },
+      "if":   { "properties": { "type": { "const": "narrated" } } },
+      "then": { "required": ["narration_clips"], "properties": { "narration_clips": { "minItems": 1 } } }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 # The Coffee That Carries a Story
-**Heritage Short | 75 seconds**
+**Heritage Short | 71 seconds** *(narration: 44.9 s measured; total with opening + end card)*
 
 **Logline:** Through the quiet ritual of preparing coffee, I discover that home is not only a place—it is the stories, values, and love passed from one generation to the next.
 
