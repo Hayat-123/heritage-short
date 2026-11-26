@@ -20,7 +20,7 @@ film: validate music endcard fallback assemble
 validate:
 	$(PYTHON) $(PIPELINE)/00_validate.py
 
-## Generate placeholder score.wav (or use real ACE-Step output if present)
+## Generate background.wav (local Karplus-Strong physical modeling synthesizer)
 music:
 	$(PYTHON) $(PIPELINE)/03_music.py
 

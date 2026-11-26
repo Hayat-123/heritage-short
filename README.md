@@ -17,16 +17,17 @@
 
 ```
 heritage-short/
-├── storyboard.json          ← single source of truth (10 shots, 71 s)
-├── storyboard.schema.json   ← JSON Schema (validated before every run)
+├── storyboard.json          ← single source of truth (10 shots, 67 s)
+├── schema/
+│   └── storyboard.schema.json ← JSON Schema (validated before every run)
 ├── Makefile                 ← make film  runs the whole pipeline
 ├── pipeline/
 │   ├── 00_validate.py       ← validate storyboard against schema
-│   ├── 01_keyframes.py      ← FLUX.2 klein via Cloudflare Workers AI (optional)
+│   ├── 01_keyframes.py      ← FLUX.1 schnell via Cloudflare Workers AI
 │   ├── 02_video_fallback.py ← Ken Burns pan/zoom via FFmpeg (primary)
 │   ├── 02_video.py          ← Wan 2.2 TI2V-5B runner / Kaggle notebook helper
-│   ├── 03_music.py          ← ACE-Step 1.5 (Kaggle) or placeholder silence
-│   ├── 04_assemble.py       ← FFmpeg: concat, duck, subtitles, both ratios
+│   ├── 03_music.py          ← Local Karplus-Strong physical synthesizer + FFmpeg reverb
+│   ├── 04_assemble.py       ← FFmpeg: concat, duck, subtitles, dual export
 │   ├── 05_endcard.py        ← end-card keyframe (FLUX or FFmpeg drawtext)
 │   ├── run_all.py           ← Python alternative to make film
 │   └── utils/
@@ -36,20 +37,22 @@ heritage-short/
 ├── assets/
 │   ├── audio/
 │   │   ├── narration_am.wav          ← 44.9 s combined Amharic narration
-│   │   └── narration/01.wav … 09.wav ← per-sentence clips
+│   │   ├── narration/01.wav … 09.wav ← per-sentence clips
+│   │   └── music/background.wav      ← Karplus-Strong Tizita acoustic score
 │   ├── keyframes/           ← FLUX PNG outputs (cached by prompt hash)
-│   ├── shots/               ← Wan 2.2 or Ken Burns MP4 outputs
-│   └── music/score.wav      ← ACE-Step output or silence placeholder
+│   └── shots/               ← Ken Burns 24fps MP4 outputs
 ├── outputs/
 │   ├── film_16x9.mp4        ← 1920×1080, H.264
 │   └── film_9x16.mp4        ← 1080×1920, H.264
 ├── runs.jsonl               ← append-only log of every real model call
 ├── DESIGN.md                ← audience intent + user test notes
 ├── ETHICS.md                ← consent, licences, labelling plan
-├── EXPERIMENTS.md           ← hypothesis → change → result log
-├── FAILURES.md              ← blockers and resolutions
+├── EXPERIMENTS.md           ← hypothesis → change → result log (10 experiments)
+├── FAILURES.md              ← blockers and resolutions (10 real failures)
 ├── ARCHITECTURE.md          ← pipeline design and contracts
-└── COSTS.md                 ← actual costs and free-tier usage
+├── COSTS.md                 ← actual costs and free-tier usage
+├── REPORT.md                ← formal written submission report
+└── SUBMISSION_CHECKLIST.md  ← walkthrough video script & submission guide
 ```
 
 ---
