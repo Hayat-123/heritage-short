@@ -36,6 +36,12 @@ from pathlib import Path
 ROOT      = Path(__file__).parent.parent
 KEYFRAMES = ROOT / "assets" / "keyframes"
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env")
+except ImportError:
+    pass
+
 VIDEO_W = 1920
 VIDEO_H = 1080
 
@@ -44,49 +50,43 @@ def _ff() -> str:
     p = shutil.which("ffmpeg")
     if p:
         return p
-    for c in [
+    candidates = [
         r"C:\ffmpeg\bin\ffmpeg.exe",
         r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
-    ]:
+    ]
+    import os
+    local_app = os.environ.get("LOCALAPPDATA", "")
+    if local_app:
+        candidates.extend([str(p) for p in Path(local_app).glob("Microsoft/WinGet/Packages/Gyan.FFmpeg*/ffmpeg*/bin/ffmpeg.exe")])
+    for c in candidates:
         if Path(c).exists():
             return c
     raise FileNotFoundError("ffmpeg not found")
 
 
 def _make_local_endcard(title: str, out: Path) -> None:
-    """Generate end card using FFmpeg drawtext — no APIs required."""
+    """Generate end card using FFmpeg drawtext with fontfile on Windows."""
     ff = _ff()
-    # Escape special chars for FFmpeg drawtext
-    def _esc(s: str) -> str:
-        return s.replace("'", "\\'").replace(":", "\\:").replace(",", "\\,")
+    font_bold = "C\\:/Windows/Fonts/arialbd.ttf"
+    font_reg  = "C\\:/Windows/Fonts/arial.ttf"
 
-    title_safe  = _esc(title)
-    credit_safe = _esc("Made with AI · Wan 2.2 · FLUX.2 · ACE-Step · Gemini")
-
-    vf = (
-        f"color=c=0x080500:size={VIDEO_W}x{VIDEO_H}[bg];"
-        f"[bg]drawtext=text='{title_safe}':"
-        f"fontcolor=white:fontsize=52:x=(w-text_w)/2:y=(h-text_h)/2-40:"
-        f"shadowcolor=black:shadowx=2:shadowy=2,"
-        f"drawtext=text='{credit_safe}':"
-        f"fontcolor=0xFFBB55:fontsize=26:x=(w-text_w)/2:y=(h-text_h)/2+40:"
-        f"shadowcolor=black:shadowx=1:shadowy=1"
-    )
-
-    result = subprocess.run([
+    cmd = [
         ff, "-y",
-        "-f", "lavfi", "-i", f"color=c=0x080500:size={VIDEO_W}x{VIDEO_H}:rate=1",
+        "-f", "lavfi", "-i", f"color=c=black:s={VIDEO_W}x{VIDEO_H}:r=1",
         "-vf", (
-            f"drawtext=text='{title_safe}':"
-            f"fontcolor=white:fontsize=52:x=(w-text_w)/2:y=(h/2)-50:"
-            f"shadowcolor=black:shadowx=2:shadowy=2,"
-            f"drawtext=text='{credit_safe}':"
-            f"fontcolor=0xFFBB55:fontsize=24:x=(w-text_w)/2:y=(h/2)+30:"
-            f"shadowcolor=black:shadowx=1:shadowy=1"
+            f"drawtext=fontfile='{font_bold}':text='Made with AI':"
+            f"fontcolor=white:fontsize=56:x=(w-text_w)/2:y=(h/2)-50,"
+            f"drawtext=fontfile='{font_reg}':text='Wan 2.2  ·  FLUX.1 Schnell  ·  ACE-Step  ·  Gemini':"
+            f"fontcolor=0xCCCCCC:fontsize=24:x=(w-text_w)/2:y=(h/2)+35"
         ),
         "-frames:v", "1",
         str(out),
-    ], capture_output=True)
+    ]
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"FFmpeg drawtext failed:\n{result.stderr.decode(errors='replace')}"
+        )
 
     if result.returncode != 0:
         raise RuntimeError(
@@ -119,11 +119,8 @@ def _make_cf_endcard(title: str, shot: dict, out: Path) -> None:
             f"{account_id}/ai/run/{model}"
         )
         payload = {
-            "prompt":    prompt,
-            "width":     VIDEO_W,
-            "height":    VIDEO_H,
-            "num_steps": 4,
-            "seed":      shot.get("seed", 110),
+            "prompt": prompt,
+            "steps":  4,       # Cloudflare FLUX only accepts prompt + steps
         }
         headers = {"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"}
 
@@ -156,8 +153,7 @@ def _make_cf_endcard(title: str, shot: dict, out: Path) -> None:
         log_call(
             stage="endcard", shot_id="shot_10", model=model,
             provider="cloudflare-workers-ai",
-            params={"prompt_prefix": prompt[:80], "width": VIDEO_W,
-                    "height": VIDEO_H, "num_steps": 4, "seed": shot.get("seed", 110)},
+            params={"prompt_prefix": prompt[:80], "steps": 4},
             cache_hit=False, latency_s=latency, cost_usd=0.0,
             cost_note="within Cloudflare Workers AI daily free allowance",
             output_path=out.relative_to(ROOT), ok=True,

@@ -43,20 +43,29 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+# Auto-load .env from project root (safe no-op if file is absent or dotenv not installed)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env")
+except ImportError:
+    pass
+
 from pipeline.utils.cache import cache_key, is_cached
 from pipeline.utils.logger import log_call
 
 KEYFRAMES_DIR = ROOT / "assets" / "keyframes"
 
-# Models to try in order (most preferred first)
+# Cloudflare Workers AI model — flux-1-schnell is the confirmed available model.
+# flux-2-klein is not yet on Cloudflare; list it first so we pick it up automatically
+# when Cloudflare adds it.
 FLUX_MODELS = [
-    "@cf/black-forest-labs/flux-2-klein",
-    "@cf/black-forest-labs/flux-1-schnell",
+    "@cf/black-forest-labs/flux-2-klein",   # future; 404s gracefully
+    "@cf/black-forest-labs/flux-1-schnell", # confirmed available
 ]
 
-# Output dimensions: 16:9 at a resolution Workers AI accepts
-IMAGE_WIDTH  = 1360
-IMAGE_HEIGHT = 768
+# NOTE: Cloudflare Workers AI FLUX does NOT accept width/height/seed params.
+# It accepts only: prompt, steps (1-8).
+# The output is always a fixed-size PNG returned as raw bytes.
 
 
 def _cf_credentials() -> tuple[str, str] | None:
@@ -86,11 +95,8 @@ def _generate_image(
             f"{account_id}/ai/run/{model}"
         )
         payload = {
-            "prompt":    prompt,
-            "width":     IMAGE_WIDTH,
-            "height":    IMAGE_HEIGHT,
-            "num_steps": 4,
-            "seed":      seed,
+            "prompt": prompt,
+            "steps":  4,       # Cloudflare FLUX only accepts prompt + steps (1-8)
         }
         headers = {
             "Authorization": f"Bearer {api_token}",
@@ -110,24 +116,26 @@ def _generate_image(
             continue
 
         if resp.status_code != 200:
-            print(f"  API error {resp.status_code}: {resp.text[:200]}")
+            print(f"  API error {resp.status_code}: {resp.text[:300]}")
             continue
 
-        # Cloudflare returns JSON {"result": {"image": "<base64>"}} or raw bytes
-        content_type = resp.headers.get("Content-Type", "")
-        if "application/json" in content_type:
+        # Check for JSON wrapper first (Cloudflare Workers AI returns {result: {image: <b64>}})
+        ct = resp.headers.get("Content-Type", "")
+        if "application/json" in ct or resp.content.startswith(b"{"):
+            import base64
             data = resp.json()
-            if data.get("success"):
-                import base64
-                img_b64 = data["result"].get("image", "")
-                img_bytes = base64.b64decode(img_b64)
+            b64_img = data.get("result", {}).get("image") or data.get("image")
+            if b64_img:
+                img_bytes = base64.b64decode(b64_img)
                 return img_bytes, model, latency
-            else:
-                print(f"  API returned success=false: {data.get('errors')}")
-                continue
-        else:
-            # Raw binary image
+            print(f"  API returned error/no image: {data.get('errors')}")
+            continue
+
+        if ct.startswith("image/") or len(resp.content) > 1000:
             return resp.content, model, latency
+
+        print(f"  Unexpected response (ct={ct}, len={len(resp.content)})")
+        continue
 
     raise RuntimeError("All Cloudflare FLUX models failed or are unavailable.")
 
@@ -176,7 +184,7 @@ def run(dry_run: bool = False, only_shot: str | None = None) -> int:
         shot_id = shot["id"]
         prompt  = f"{shot['image_prompt']}, {style_suffix}"
         seed    = shot.get("seed", 42)
-        key     = cache_key("keyframes", shot, extra={"width": IMAGE_WIDTH, "height": IMAGE_HEIGHT})
+        key     = cache_key("keyframes", shot, extra={"steps": 4})
         out_path = KEYFRAMES_DIR / f"{key}.png"
 
         if is_cached(out_path):
@@ -200,8 +208,7 @@ def run(dry_run: bool = False, only_shot: str | None = None) -> int:
                 shot_id=shot_id,
                 model=model_used,
                 provider="cloudflare-workers-ai",
-                params={"prompt_prefix": prompt[:80], "width": IMAGE_WIDTH,
-                        "height": IMAGE_HEIGHT, "num_steps": 4, "seed": seed},
+                params={"prompt_prefix": prompt[:80], "steps": 4},
                 cache_hit=False,
                 latency_s=latency,
                 cost_usd=0.0,

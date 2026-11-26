@@ -67,6 +67,7 @@
         "camera":       { "type": "string" },
         "music_cue":    { "type": "string" },
         "seed":         { "type": "integer", "minimum": 0 },
+        "reason":       { "type": "string", "description": "The narrative and emotional purpose of this shot in the film" },
         "narration_clips": {
           "type": "array",
           "items": { "$ref": "#/definitions/narration_clip" }

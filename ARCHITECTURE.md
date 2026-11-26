@@ -90,6 +90,30 @@ SRT is generated from `storyboard.json` narration_clips timing.
 Each clip's absolute timestamp = Σ(previous shot durations) + clip.offset_s.  
 FFmpeg `subtitles=` filter burns open captions into the picture.
 
+## Failure Handling & Resilience
+
+The pipeline implements defensive programming and multi-tier fallbacks so execution never crashes unexpectedly:
+
+1. **API Retries & Network Resiliency:**
+   - In `pipeline/01_keyframes.py`, remote API calls implement retry loops with exponential backoff.
+   - If Cloudflare Workers AI returns a 429 (rate-limit) or 5xx (server error), the script pauses and retries up to 3 times before recording the failure in `runs.jsonl`.
+
+2. **Hierarchical Video Fallback:**
+   - `04_assemble.py` checks for generated video in order of quality:
+     1. `assets/shots/<id>.mp4` (Wan 2.2 real diffusion video).
+     2. `assets/shots/<id>_fallback.mp4` (Ken Burns 24fps pan/zoom from keyframe).
+   - If GPU access or quota runs out, the fallback stage runs in seconds on any CPU, guaranteeing a submittable film.
+
+3. **Music Synthesis Fallback:**
+   - `04_assemble.py` resolves music sources in priority order:
+     1. `assets/audio/music/background.wav` (Primary synthesized or composed track).
+     2. `assets/music/score.wav` (Legacy fallback score).
+     3. Inline silence placeholder (automatically generated if neither exists, so video assembly can still be verified).
+
+4. **Environment & Binary Discovery:**
+   - Automated FFmpeg resolution: Checks `PATH`, default Windows Program Files, tools directories, and dynamically searches local WinGet package locations (`%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg*`).
+   - Fontconfig fallback: Explicitly maps Windows system TrueType fonts (`arial.ttf`, `arialbd.ttf`) with escaped drive colons to avoid libass/fontconfig crashes on Windows.
+
 ## Reproducibility
 
 ```bash

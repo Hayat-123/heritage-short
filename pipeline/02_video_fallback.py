@@ -33,6 +33,7 @@ import sys
 from pathlib import Path
 
 ROOT        = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
 KEYFRAMES   = ROOT / "assets" / "keyframes"
 SHOTS_DIR   = ROOT / "assets" / "shots"
 
@@ -62,11 +63,16 @@ def _ffmpeg_path() -> str:
     if path:
         return path
     # Common Windows install locations
-    for candidate in [
+    candidates = [
         r"C:\ffmpeg\bin\ffmpeg.exe",
         r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
         r"C:\tools\ffmpeg\bin\ffmpeg.exe",
-    ]:
+    ]
+    import os
+    local_app = os.environ.get("LOCALAPPDATA", "")
+    if local_app:
+        candidates.extend([str(p) for p in Path(local_app).glob("Microsoft/WinGet/Packages/Gyan.FFmpeg*/ffmpeg*/bin/ffmpeg.exe")])
+    for candidate in candidates:
         if Path(candidate).exists():
             return candidate
     raise FileNotFoundError(
@@ -99,27 +105,38 @@ def _ken_burns(image_path: Path, duration_s: float, out_mp4: Path, seed: int) ->
     """
     Apply Ken Burns pan/zoom to *image_path* and write *out_mp4*.
 
-    Alternates zoom direction based on parity of seed:
-        even seed → slow zoom-in  (1.0 → 1.5)
-        odd  seed → slow zoom-out (1.5 → 1.0)
+    Alternates motion across 4 gentle cinematic patterns based on seed:
+        seed % 4 == 0: slow zoom-in (1.0 -> 1.12)
+        seed % 4 == 1: slow zoom-out (1.12 -> 1.0)
+        seed % 4 == 2: gentle pan left to right
+        seed % 4 == 3: gentle pan right to left
     """
     ff     = _ffmpeg_path()
     frames = int(duration_s * FPS)
 
-    if seed % 2 == 0:
-        zoom_expr = f"'min(zoom+0.0015,1.5)'"
-        x_expr    = "'iw/2-(iw/zoom/2)'"
-        y_expr    = "'ih/2-(ih/zoom/2)'"
+    pattern = seed % 4
+    if pattern == 0:
+        z = "min(zoom+0.0006,1.12)"
+        x = "(iw-iw/zoom)/2"
+        y = "(ih-(iw/zoom)*9/16)/2"
+    elif pattern == 1:
+        z = "if(eq(on,1),1.12,max(1.0,zoom-0.0006))"
+        x = "(iw-iw/zoom)/2"
+        y = "(ih-(iw/zoom)*9/16)/2"
+    elif pattern == 2:
+        z = "1.08"
+        x = f"(iw-iw/1.08)*(on/{frames})"
+        y = "(ih-(iw/1.08)*9/16)/2"
     else:
-        zoom_expr = f"'max(1.0,1.5-0.0015*on)'"
-        x_expr    = "'iw/2-(iw/zoom/2)'"
-        y_expr    = "'ih/2-(ih/zoom/2)'"
+        z = "1.08"
+        x = f"(iw-iw/1.08)*(1-on/{frames})"
+        y = "(ih-(iw/1.08)*9/16)/2"
 
-    # Scale source image large before zoompan so crop never loses resolution
+    # Scale square / arbitrary input to 2560x2560 so zoompan's 16:9 window
+    # frames the full image area crisply without extreme zoom-in blur
     vf = (
-        f"scale=8000:-1,"
-        f"zoompan=z={zoom_expr}:x={x_expr}:y={y_expr}:d={frames}:s={VIDEO_W}x{VIDEO_H},"
-        f"fps=fps={FPS}"
+        f"scale=2560:2560:force_original_aspect_ratio=increase,crop=2560:2560,"
+        f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={VIDEO_W}x{VIDEO_H}:fps={FPS}"
     )
 
     cmd = [
@@ -194,7 +211,7 @@ def run(only_shot: str | None = None, force: bool = False) -> int:
         else:
             # Try to match via storyboard cache key (hash)
             from pipeline.utils.cache import cache_key
-            key = cache_key("keyframes", shot, extra={"width": 1360, "height": 768})
+            key = cache_key("keyframes", shot, extra={"steps": 4})
             hashed = KEYFRAMES / f"{key}.png"
             if hashed.exists():
                 keyframe_png = hashed

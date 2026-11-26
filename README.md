@@ -8,8 +8,8 @@
 
 ## Watch the Film
 
-- YouTube (16:9): [link to be added]
-- Instagram Reels (9:16): [link to be added]
+- **Vertical (9:16 - Main Submission):** [Watch on Vimeo (9:16)](https://vimeo.com/share/a4244b2a-c8c4-48c5-ae7b-18889444628f?share=copy&fl=sv&fe=ci)
+- **Horizontal (16:9):** [Watch on Vimeo (16:9)](https://vimeo.com/share/7d08e21a-7bbc-44dc-a991-cb4fd37afde6?share=copy&fl=sv&fe=ci)
 
 ---
 

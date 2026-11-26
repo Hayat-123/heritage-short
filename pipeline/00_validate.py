@@ -56,7 +56,9 @@ def validate_timing(storyboard: dict) -> list[str]:
 
 
 def main() -> int:
-    schema_path    = ROOT / "storyboard.schema.json"
+    schema_path = ROOT / "schema" / "storyboard.schema.json"
+    if not schema_path.exists():
+        schema_path = ROOT / "storyboard.schema.json"
     storyboard_path = ROOT / "storyboard.json"
 
     if not schema_path.exists():

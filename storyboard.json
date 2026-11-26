@@ -2,7 +2,7 @@
   "film": {
     "title": "The Coffee That Carries a Story",
     "logline": "Through the quiet ritual of preparing coffee, I discover that home is not only a place — it is the stories, values, and love passed from one generation to the next.",
-    "duration_target_s": 71,
+    "duration_target_s": 67,
     "aspect_ratios": ["16:9", "9:16"],
     "language_narration": "am",
     "language_subtitles": "en",
@@ -22,17 +22,19 @@
       "motion_prompt": "Slow push-in toward the glowing embers, smoke rising gently",
       "camera": "low angle, locked-off, slow push-in",
       "music_cue": "music swells softly from silence; sparse masinko string note",
-      "seed": 101
+      "seed": 101,
+      "reason": "Atmospheric hook establishing sacred quietude and the sensory presence of the jebena before any words are spoken."
     },
     {
       "id": "shot_02",
       "type": "narrated",
       "duration_s": 5,
-      "image_prompt": "Close detail of a traditional Ethiopian mud-and-plaster interior wall, warm golden light raking across the texture, a wooden door frame at the edge of frame, soft bokeh background, cinematic still, 35mm film grain, warm amber tones, shallow depth of field, intimate Ethiopian interior",
-      "motion_prompt": "Very slow tilt up along the wall, revealing the ceiling beam",
-      "camera": "medium close-up, slow tilt up",
-      "music_cue": "underscore: quiet, sustained strings",
-      "seed": 102,
+      "image_prompt": "Cinematic wide establishing shot of a warm humble traditional Ethiopian countryside home at sunrise, thatch and timber roof, earthen plaster walls with morning sunlight, a small wooden doorway open with gentle amber firelight glowing from within, peaceful, poignant, 35mm film grain, warm amber tones, intimate Ethiopian interior",
+      "motion_prompt": "Very slow gentle push-in toward the open glowing doorway",
+      "camera": "wide establishing, slow push-in",
+      "music_cue": "underscore: quiet, sustained strings and gentle acoustic guitar",
+      "seed": 202,
+      "reason": "Ground the narrative in a physical sense of origin and warmth, expanding 'home' beyond simple architectural shelter.",
       "narration_clips": [
         {
           "path": "assets/audio/narration/01.wav",
@@ -51,6 +53,7 @@
       "camera": "extreme close-up, slow zoom-in",
       "music_cue": "underscore: gentle masinko melody, soft percussion enters",
       "seed": 103,
+      "reason": "Intimate close-up showing the visceral sensory triggers of memory: the bubbling sound, rising steam, and familial hands.",
       "narration_clips": [
         {
           "path": "assets/audio/narration/02.wav",
@@ -69,6 +72,7 @@
       "camera": "medium shot, slow rack focus",
       "music_cue": "underscore: melody continues, slightly warmer",
       "seed": 104,
+      "reason": "Introduce the elder storyteller whose living presence connects ancestral history, labor, and perseverance.",
       "narration_clips": [
         {
           "path": "assets/audio/narration/03.wav",
@@ -87,6 +91,7 @@
       "camera": "medium close-up, slow push-in",
       "music_cue": "underscore: melody softens, more intimate",
       "seed": 105,
+      "reason": "Capture the innocent child's perspective—absorbing lifelong lessons subconsciously before understanding their weight.",
       "narration_clips": [
         {
           "path": "assets/audio/narration/04.wav",
@@ -105,6 +110,7 @@
       "camera": "close-up, slow tilt down",
       "music_cue": "underscore: emotional swell, strings rise slightly",
       "seed": 106,
+      "reason": "The physical and symbolic act of generational transfer: pouring coffee and sharing heritage across hands.",
       "narration_clips": [
         {
           "path": "assets/audio/narration/05.wav",
@@ -123,6 +129,7 @@
       "camera": "extreme close-up, locked-off",
       "music_cue": "underscore: piano or krar note; held",
       "seed": 107,
+      "reason": "Contemplative stillness centering the core philosophical definition: coffee ritual as patience, love, and identity.",
       "narration_clips": [
         {
           "path": "assets/audio/narration/06.wav",
@@ -141,6 +148,7 @@
       "camera": "medium, slow pull-back",
       "music_cue": "underscore: strings swell, more modern feel, bittersweet",
       "seed": 108,
+      "reason": "Bridge past and present: showing the traditional jebena thriving within modern urban Addis Ababa life.",
       "narration_clips": [
         {
           "path": "assets/audio/narration/07.wav",
@@ -165,6 +173,7 @@
       "camera": "medium-wide, slow zoom-out",
       "music_cue": "underscore: full arrangement, gentle resolution",
       "seed": 109,
+      "reason": "Emotional resolution and personal pledge: the narrator fully embraces their cultural duty to carry the story forward.",
       "narration_clips": [
         {
           "path": "assets/audio/narration/09.wav",
@@ -177,12 +186,13 @@
     {
       "id": "shot_10",
       "type": "music_only",
-      "duration_s": 7,
-      "image_prompt": "A clean dark frame with softly glowing text, the title 'The Coffee That Carries a Story' in white Ethiopic and Latin script, below it in smaller text 'Made with AI — Wan 2.2 · FLUX.2 · ACE-Step · Gemini', ember-orange accent glow, minimalist cinematic end card, cinematic still, 35mm film grain, warm amber tones, shallow depth of field, intimate Ethiopian interior",
-      "motion_prompt": "Fade in from black, hold, fade out to black",
-      "camera": "locked-off, fade in/out",
-      "music_cue": "underscore swells to full, then fades to silence over last 3 seconds",
-      "seed": 110
+      "duration_s": 3,
+      "image_prompt": "A clean dark frame with centered crisp white text 'Made with AI', underneath in elegant smaller text 'Wan 2.2 · FLUX.1 Schnell · ACE-Step · Gemini', minimalist cinematic end card",
+      "motion_prompt": "Centered text on black background, clean fade out to black over last 1 second",
+      "camera": "locked-off, fade out",
+      "music_cue": "score gently fades to silence over last 2 seconds",
+      "seed": 110,
+      "reason": "Transparent AI disclosure and model credits end card adhering to ethical AI filmmaking standards."
     }
   ]
 }

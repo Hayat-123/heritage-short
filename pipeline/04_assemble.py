@@ -40,12 +40,19 @@ from pathlib import Path
 ROOT    = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env")
+except ImportError:
+    pass
+
 from pipeline.utils.srt import write_srt, measure_wav_durations
 
-ASSETS  = ROOT / "assets"
-SHOTS   = ASSETS / "shots"
-MUSIC   = ASSETS / "music" / "score.wav"
-OUTPUTS = ROOT / "outputs"
+ASSETS         = ROOT / "assets"
+SHOTS          = ASSETS / "shots"
+MUSIC_PRIMARY  = ASSETS / "audio" / "music" / "background.wav"
+MUSIC_FALLBACK = ASSETS / "music" / "score.wav"
+OUTPUTS        = ROOT / "outputs"
 
 FPS       = 24
 VIDEO_W16 = 1920
@@ -60,11 +67,16 @@ def _ff() -> str:
     path = shutil.which("ffmpeg")
     if path:
         return path
-    for c in [
+    candidates = [
         r"C:\ffmpeg\bin\ffmpeg.exe",
         r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
         r"C:\tools\ffmpeg\bin\ffmpeg.exe",
-    ]:
+    ]
+    import os
+    local_app = os.environ.get("LOCALAPPDATA", "")
+    if local_app:
+        candidates.extend([str(p) for p in Path(local_app).glob("Microsoft/WinGet/Packages/Gyan.FFmpeg*/ffmpeg*/bin/ffmpeg.exe")])
+    for c in candidates:
         if Path(c).exists():
             return c
     raise FileNotFoundError(
@@ -212,24 +224,77 @@ def _mix_audio(
     ], label="music_trim")
 
     out = tmp_dir / "mixed_audio.wav"
-    # sidechaincompress: narration sidechain compresses music to ~−12 dB when speaking
+    fade_out_st = max(0.0, total_s - 3.0)
+    # Audio ducking: 0:a is narration, 1:a is music
     _run([
         _ff(), "-y",
-        "-i", str(music_trimmed),
         "-i", str(narration_wav),
+        "-i", str(music_trimmed),
         "-filter_complex",
         (
-            "[0:a]volume=0.5[music_in];"           # music base at −6 dB
-            "[1:a]asplit=2[narr_sc][narr_mix];"    # split narration: sidechain + mix
-            "[music_in][narr_sc]sidechaincompress="
-            "threshold=0.02:ratio=8:attack=50:release=500:level_sc=0.9[music_ducked];"
-            "[music_ducked][narr_mix]amix=inputs=2:duration=longest:normalize=0[out]"
+            f"[1:a]highpass=f=120,volume=0.20,afade=t=in:st=0:d=1.5,afade=t=out:st={fade_out_st:.1f}:d=3[music];"
+            f"[music][0:a]sidechaincompress=threshold=0.02:ratio=6:attack=300:release=1500[ducked];"
+            f"[0:a][ducked]amix=inputs=2:duration=first:dropout_transition=2,loudnorm=I=-14:TP=-1.0:LRA=11[out]"
         ),
         "-map", "[out]",
         "-t", str(total_s),
         "-c:a", "pcm_s16le",
         str(out),
     ], label="audio_mix")
+    return out
+
+
+def _two_pass_loudnorm(
+    raw_audio: Path,
+    total_s: float,
+    tmp_dir: Path,
+) -> Path:
+    """
+    Two-pass EBU R128 loudness normalization to -14 LUFS / -1 dBTP,
+    with a smooth 2-second audio fade-out at the end.
+    """
+    ff = _ff()
+    # Pass 1: measure
+    cmd_pass1 = [
+        ff, "-y",
+        "-i", str(raw_audio),
+        "-af", "loudnorm=I=-14:TP=-1:LRA=11:print_format=json",
+        "-f", "null", "-",
+    ]
+    res1 = subprocess.run(cmd_pass1, capture_output=True, text=True, errors="replace")
+
+    stats = {}
+    stderr = res1.stderr
+    j_start = stderr.rfind("{")
+    j_end   = stderr.rfind("}") + 1
+    if j_start != -1 and j_end > j_start:
+        try:
+            stats = json.loads(stderr[j_start:j_end])
+        except Exception:
+            pass
+
+    fade_st = max(0.0, total_s - 2.0)
+    if stats.get("input_i"):
+        ln_filter = (
+            f"loudnorm=I=-14:TP=-1:LRA=11:"
+            f"measured_I={stats['input_i']}:"
+            f"measured_TP={stats['input_tp']}:"
+            f"measured_LRA={stats['input_lra']}:"
+            f"measured_thresh={stats['input_thresh']}:"
+            f"offset={stats.get('target_offset', '0.0')}:"
+            f"linear=true"
+        )
+    else:
+        ln_filter = "loudnorm=I=-14:TP=-1:LRA=11"
+
+    out = tmp_dir / "normalized_audio.wav"
+    _run([
+        ff, "-y",
+        "-i", str(raw_audio),
+        "-af", f"{ln_filter},afade=t=out:st={fade_st}:d=2",
+        "-c:a", "pcm_s16le",
+        str(out),
+    ], label="two_pass_loudnorm")
     return out
 
 
@@ -305,8 +370,14 @@ def assemble(radio_cut: bool, no_subtitles: bool, force: bool) -> int:
 
         # ---- 4. Music + ducking ----
         print("Step 4/6: mixing music with ducking …")
-        if not MUSIC.exists():
-            print(f"  ⚠  score.wav not found — using silence. Run 03_music.py first.")
+        if MUSIC_PRIMARY.exists():
+            music_src = MUSIC_PRIMARY
+            print(f"  ✓ Using background music: {MUSIC_PRIMARY.relative_to(ROOT)}")
+        elif MUSIC_FALLBACK.exists():
+            music_src = MUSIC_FALLBACK
+            print(f"  ✓ Using fallback score: {MUSIC_FALLBACK.relative_to(ROOT)}")
+        else:
+            print(f"  ⚠  background.wav not found — using silence. Run 03_music.py first.")
             # Generate silence placeholder on the fly
             silence = tmp / "score_silence.wav"
             _run([
@@ -316,58 +387,72 @@ def assemble(radio_cut: bool, no_subtitles: bool, force: bool) -> int:
                 str(silence),
             ], label="inline_silence")
             music_src = silence
-        else:
-            music_src = MUSIC
 
-        mixed_audio = _mix_audio(music_src, narr_wav, total_s, tmp)
-        print("  ✓ audio mix ready")
+        raw_audio = _mix_audio(music_src, narr_wav, total_s, tmp)
+        print("  ✓ audio ducking mix ready")
+        print("Step 4b/6: two-pass loudnorm normalization (-14 LUFS / -1 dBTP) …")
+        norm_audio = _two_pass_loudnorm(raw_audio, total_s, tmp)
+        print("  ✓ loudness normalization and 2s fade ready")
 
         # ---- 5. Generate SRT ----
         srt_path = tmp / "film.srt"
         if not no_subtitles:
             print("Step 5/6: generating subtitles …")
             write_srt(storyboard, wav_durs, srt_path)
-            # Count entries
             entries = srt_path.read_text(encoding="utf-8").count(" --> ")
-            print(f"  ✓ {entries} subtitle entries → {srt_path.name}")
+            print(f"  ✓ {entries} subtitle cues → {srt_path.name}")
 
         # ---- 6a. Export 16:9 ----
         print("Step 6/6: exporting 16:9 …")
-        sub_filter = ""
-        if not no_subtitles and srt_path.exists():
-            # FFmpeg needs forward slashes and escaped colons on Windows
-            srt_safe = srt_path.as_posix().replace(":", "\\:")
-            sub_filter = f",subtitles='{srt_safe}':force_style='FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,MarginV=40'"
+        srt_safe = srt_path.as_posix().replace(":", "\\:") if srt_path.exists() else ""
+        sub_16x9 = ""
+        sub_9x16 = ""
+        if not no_subtitles and srt_safe:
+            sub_16x9 = (
+                f",subtitles='{srt_safe}':force_style="
+                f"'FontName=Arial,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
+                f"BorderStyle=1,Outline=2,Alignment=2,MarginV=60,MarginL=80,MarginR=80'"
+            )
+            sub_9x16 = (
+                f",subtitles='{srt_safe}':force_style="
+                f"'FontName=Arial,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
+                f"BorderStyle=1,Outline=2,Alignment=2,MarginV=70,MarginL=30,MarginR=30'"
+            )
 
         _run([
             ff, "-y",
             "-i", str(video_track),
-            "-i", str(mixed_audio),
+            "-i", str(norm_audio),
             "-map", "0:v",
             "-map", "1:a",
-            "-vf", f"scale={VIDEO_W16}:{VIDEO_H16}:force_original_aspect_ratio=decrease,"
-                   f"pad={VIDEO_W16}:{VIDEO_H16}:-1:-1:color=black"
-                   f"{sub_filter}",
+            "-vf", (
+                f"scale={VIDEO_W16}:{VIDEO_H16}:force_original_aspect_ratio=decrease,"
+                f"pad={VIDEO_W16}:{VIDEO_H16}:-1:-1:color=black"
+                f"{sub_16x9}"
+            ),
             "-c:v", "libx264", "-crf", "18", "-preset", "slow",
             "-c:a", "aac", "-b:a", "192k",
-            "-af", "loudnorm=I=-14:TP=-1:LRA=11",
             "-t", str(total_s),
             str(out_16x9),
         ], label="export_16x9")
         print(f"  ✓ {out_16x9}")
 
-        # ---- 6b. Export 9:16 ----
+        # ---- 6b. Export 9:16 (Independent export from clean video_track, NO duplicate overlay!) ----
         print("     exporting 9:16 …")
         _run([
             ff, "-y",
-            "-i", str(out_16x9),
+            "-i", str(video_track),
+            "-i", str(norm_audio),
+            "-map", "0:v",
+            "-map", "1:a",
             "-vf", (
                 f"crop=ih*9/16:ih:(iw-ih*9/16)/2:0,"
                 f"scale=1080:1920"
-                f"{sub_filter}"
+                f"{sub_9x16}"
             ),
             "-c:v", "libx264", "-crf", "18", "-preset", "slow",
-            "-c:a", "copy",
+            "-c:a", "aac", "-b:a", "192k",
+            "-t", str(total_s),
             str(out_9x16),
         ], label="export_9x16")
         print(f"  ✓ {out_9x16}")
