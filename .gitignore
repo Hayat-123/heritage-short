@@ -1,0 +1,33 @@
+# ── Secrets ────────────────────────────────────────────────
+.env
+
+# ── Generated pipeline outputs ──────────────────────────────
+outputs/
+assets/keyframes/
+assets/shots/
+assets/music/
+
+# ── Logs (keep runs.jsonl — it is a submission artefact) ────
+# runs.jsonl intentionally NOT ignored
+
+# ── Python ──────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# ── Editors / OS ────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# ── Temp / scratch ──────────────────────────────────────────
+*.tmp
+*.bak
